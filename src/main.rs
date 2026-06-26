@@ -9,6 +9,7 @@ mod cli;
 mod scanner;
 mod utils;
 mod cve;
+mod audit;
 
 fn main() {
     let cli = Cli::parse();
@@ -276,7 +277,61 @@ fn cmd_scan(_cli: Cli, kernel: bool, services: bool) -> Result<(), Box<dyn std::
 }
 
 fn cmd_audit(_cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Audit configuration... (à implémenter en Phase 4)");
+    println!("=== Audit configuration du système ===\n");
+
+    println!("--- Audit SSH ---");
+    match audit::ssh::audit_ssh() {
+        Ok(findings) => {
+            if findings.is_empty() {
+                println!("✓ Configuration SSH sécurisée (score: 100/100)");
+            } else {
+                let score = audit::ssh::ssh_security_score(&findings);
+                println!("Score de sécurité SSH: {}/100\n", score);
+                for f in &findings {
+                    println!("[{}] {} - {}", f.status, f.check, f.severity);
+                    println!("  → {}\n", f.recommendation);
+                }
+            }
+        }
+        Err(e) => println!("Erreur lors de l'audit SSH: {e}"),
+    }
+
+    println!("\n--- Audit Firewall ---");
+    match audit::firewall::audit_firewall() {
+        Ok(infos) => {
+            for info in &infos {
+                println!("Backend: {} (actif: {})", info.backend, info.active);
+                if !info.findings.is_empty() {
+                    for f in &info.findings {
+                        println!("  [{}] {} - {}", f.status, f.check, f.severity);
+                        println!("    → {}\n", f.recommendation);
+                    }
+                }
+                if info.rules.is_empty() && info.active {
+                    println!("  Aucune règle personnalisée détectée.");
+                }
+            }
+        }
+        Err(e) => println!("Erreur lors de l'audit firewall: {e}"),
+    }
+
+    println!("\n--- Audit Sudoers ---");
+    match audit::sudoers::audit_sudoers() {
+        Ok(findings) => {
+            if findings.is_empty() {
+                println!("✓ Configuration sudoers sécurisée (score: 100/100)");
+            } else {
+                let score = audit::sudoers::sudoers_security_score(&findings);
+                println!("Score de sécurité sudoers: {}/100\n", score);
+                for f in &findings {
+                    println!("[{}] {} - {}", f.status, f.check, f.severity);
+                    println!("  → {}\n", f.recommendation);
+                }
+            }
+        }
+        Err(e) => println!("Erreur lors de l'audit sudoers: {e}"),
+    }
+
     Ok(())
 }
 
