@@ -29,10 +29,10 @@ pub enum Commands {
     },
     Packages,
     Scan {
-        #[arg(long)]
+        #[arg(long, default_value_t = true)]
         kernel: bool,
 
-        #[arg(long)]
+        #[arg(long, default_value_t = true)]
         services: bool,
     },
     Audit,

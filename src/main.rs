@@ -94,8 +94,184 @@ fn cmd_packages(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn cmd_scan(_cli: Cli, _kernel: bool, _services: bool) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Scan complet... (à implémenter en Phase 3)");
+fn cmd_scan(_cli: Cli, kernel: bool, services: bool) -> Result<(), Box<dyn std::error::Error>> {
+    println!("=== Scan complet du système ===\n");
+
+    let distro = scanner::distro::detect()?;
+    let kernel_info = scanner::kernel::detect().ok();
+    let manager = scanner::packages::detect()?;
+    let packages = manager.list_packages()?;
+
+    println!("Distro: {} ({})", distro.pretty_name, distro.id);
+    println!("Version: {}", distro.version);
+    if let Some(codename) = distro.codename {
+        println!("Codename: {codename}");
+    }
+    if let Some(ref k) = kernel_info {
+        println!("Kernel: {} [{}]", k.version, k.arch);
+    }
+    println!("Package Manager: {:?}", manager);
+    println!("Paquets installés: {}\n", packages.len());
+
+    let cache = CveCache::new(std::path::PathBuf::from("./spira_cache.db")).ok();
+
+    if cache.is_none() {
+        println!(
+            "⚠ Cache CVE introuvable. Exécutez 'spira update' pour activer la détection de vulnérabilités."
+        );
+    }
+
+    if let Some(ref cache) = cache {
+        println!("--- Paquets à risque ---");
+        let mut pkg_vulns = Vec::new();
+        for pkg in &packages {
+            let cpes = cache.search_cpes_by_product(&pkg.name)?;
+            let mut seen = std::collections::HashSet::new();
+            for (cve, _cpe) in &cpes {
+                if seen.insert(cve.id.clone()) {
+                    pkg_vulns.push((cve.clone(), pkg.name.clone(), pkg.version.clone()));
+                }
+            }
+        }
+
+        if pkg_vulns.is_empty() {
+            println!("Aucune vulnérabilité de paquet détectée.");
+        } else {
+            pkg_vulns.sort_by(|a, b| {
+                let score_a = a.0.cvss_score.unwrap_or(0.0);
+                let score_b = b.0.cvss_score.unwrap_or(0.0);
+                score_b
+                    .partial_cmp(&score_a)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+            println!(
+                "{} vulnérabilité(s) de paquet détectée(s):\n",
+                pkg_vulns.len()
+            );
+            for (cve, pkg_name, pkg_ver) in &pkg_vulns {
+                println!("CVE: {}", cve.id);
+                println!(
+                    "  Score: {:?}",
+                    cve.cvss_score
+                        .map(|s| format!("{:.1}", s))
+                        .unwrap_or_else(|| "N/A".to_string())
+                );
+                println!(
+                    "  Sévérité: {}",
+                    cve.severity.as_deref().unwrap_or("N/A")
+                );
+                println!("  Paquet: {} {}", pkg_name, pkg_ver);
+                println!(
+                    "  Description: {}\n",
+                    truncate(&cve.description, 120)
+                );
+            }
+        }
+
+        if kernel {
+            println!("\n--- Vulnérabilités du noyau ---");
+            match scanner::kernel::scan_kernel_cves(cache) {
+                Ok(kernel_vulns) => {
+                    if kernel_vulns.is_empty() {
+                        println!("Aucune vulnérabilité du noyau détectée.");
+                    } else {
+                        println!(
+                            "{} vulnérabilité(s) du noyau détectée(s):\n",
+                            kernel_vulns.len()
+                        );
+                        for (cve, _cpe) in &kernel_vulns {
+                            println!("CVE: {}", cve.id);
+                            println!(
+                                "  Score: {:?}",
+                                cve.cvss_score
+                                    .map(|s| format!("{:.1}", s))
+                                    .unwrap_or_else(|| "N/A".to_string())
+                            );
+                            println!(
+                                "  Sévérité: {}",
+                                cve.severity.as_deref().unwrap_or("N/A")
+                            );
+                            println!(
+                                "  Description: {}\n",
+                                truncate(&cve.description, 120)
+                            );
+                        }
+                    }
+                }
+                Err(e) => println!("Erreur lors du scan du noyau: {e}"),
+            }
+        }
+
+        if services {
+            println!("\n--- Services systemd actifs ---");
+            match scanner::services::detect_services() {
+                Ok(svcs) => {
+                    if svcs.is_empty() {
+                        println!("Aucun service systemd actif détecté.");
+                    } else {
+                        println!("{} service(s) actif(s):\n", svcs.len());
+                        for s in &svcs {
+                            println!("  {} - {} ({})", s.name, s.description, s.status);
+                        }
+                    }
+                }
+                Err(e) => println!("Erreur lors de la détection des services: {e}"),
+            }
+
+            println!("\n--- Ports ouverts ---");
+            match scanner::services::detect_open_ports() {
+                Ok(ports) => {
+                    if ports.is_empty() {
+                        println!("Aucun port ouvert détecté.");
+                    } else {
+                        println!("{} port(s) ouvert(s):\n", ports.len());
+                        for p in &ports {
+                            println!(
+                                "  {}:{} ({}) - {}",
+                                p.local_addr, p.port, p.protocol, p.process
+                            );
+                        }
+                    }
+                }
+                Err(e) => println!("Erreur lors de la détection des ports: {e}"),
+            }
+
+            println!("\n--- Vulnérabilités des services réseau ---");
+            match scanner::network::scan_ports_cves(cache) {
+                Ok(net_vulns) => {
+                    let total: usize = net_vulns.iter().map(|v| v.cves.len()).sum();
+                    if total == 0 {
+                        println!("Aucune vulnérabilité de service réseau détectée.");
+                    } else {
+                        println!(
+                            "{} vulnérabilité(s) détectée(s) sur les services réseau:\n",
+                            total
+                        );
+                        for vuln in &net_vulns {
+                            for (cve_id, score, severity) in &vuln.cves {
+                                println!(
+                                    "CVE: {} (port {}/{}, service: {})",
+                                    cve_id, vuln.port, vuln.protocol, vuln.service_name
+                                );
+                                println!(
+                                    "  Score: {:?}",
+                                    score
+                                        .map(|s| format!("{:.1}", s))
+                                        .unwrap_or_else(|| "N/A".to_string())
+                                );
+                                println!(
+                                    "  Sévérité: {}\n",
+                                    severity.as_deref().unwrap_or("N/A")
+                                );
+                            }
+                        }
+                    }
+                }
+                Err(e) => println!("Erreur lors du scan réseau: {e}"),
+            }
+        }
+    }
+
     Ok(())
 }
 
