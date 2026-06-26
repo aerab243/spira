@@ -34,8 +34,14 @@ pub enum Commands {
 
         #[arg(long, default_value_t = true)]
         services: bool,
+
+        #[arg(short, long, default_value = "terminal")]
+        format: String,
     },
-    Audit,
+    Audit {
+        #[arg(short, long, default_value = "terminal")]
+        format: String,
+    },
     Vulns {
         name: String,
     },
