@@ -3,6 +3,11 @@
 **/*.rs.bk
 Cargo.lock
 
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
 # IDEs
 .idea/
 .vscode/
