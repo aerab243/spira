@@ -1,5 +1,6 @@
 use clap::Parser;
 use crate::cli::{Cli, Commands};
+use crate::scanner::packages::PackageManagerTrait;
 
 mod cli;
 mod scanner;
@@ -62,8 +63,30 @@ fn cmd_detect(cli: Cli, _kernel: bool, _packages: bool) -> Result<(), Box<dyn st
     Ok(())
 }
 
-fn cmd_packages(_cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Enumération des paquets... (à implémenter en Phase 1)");
+fn cmd_packages(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
+    let manager = scanner::packages::detect()?;
+    let packages = manager.list_packages()?;
+
+    if cli.json {
+        let json: Vec<serde_json::Value> = packages
+            .iter()
+            .map(|p| {
+                serde_json::json!({
+                    "name": p.name,
+                    "version": p.version,
+                    "source": format!("{:?}", p.source),
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&json)?);
+        return Ok(());
+    }
+
+    println!("{} paquets trouvés:", packages.len());
+    for p in packages {
+        println!("  {} {} ({:?})", p.name, p.version, p.source);
+    }
+
     Ok(())
 }
 
