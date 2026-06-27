@@ -4,6 +4,16 @@ use crate::scanner::network::PortVulnerability;
 use crate::scanner::services::{PortInfo, ServiceInfo};
 use crate::utils::truncate;
 
+#[allow(dead_code)]
+const RED: &str = "\x1b[31m";
+const GREEN: &str = "\x1b[32m";
+const YELLOW: &str = "\x1b[33m";
+const BLUE: &str = "\x1b[34m";
+const CYAN: &str = "\x1b[36m";
+const BOLD: &str = "\x1b[1m";
+const RESET: &str = "\x1b[0m";
+const DIM: &str = "\x1b[2m";
+
 #[derive(Debug, Clone)]
 pub struct CveSummary {
     pub id: String,
@@ -114,14 +124,6 @@ impl std::fmt::Display for AuditReport {
 }
 
 fn write_scan_report(r: &ScanReport, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    const RED: &str = "\x1b[31m";
-    const GREEN: &str = "\x1b[32m";
-    const YELLOW: &str = "\x1b[33m";
-    const BLUE: &str = "\x1b[34m";
-    const CYAN: &str = "\x1b[36m";
-    const BOLD: &str = "\x1b[1m";
-    const RESET: &str = "\x1b[0m";
-    const DIM: &str = "\x1b[2m";
 
     writeln!(f, "{BOLD}╔══════════════════════════════════════════════╗{RESET}")?;
     writeln!(f, "{BOLD}║         SPIRA - Scan du système             ║{RESET}")?;
@@ -206,14 +208,6 @@ fn write_scan_report(r: &ScanReport, f: &mut std::fmt::Formatter<'_>) -> std::fm
 }
 
 fn write_audit_report(r: &AuditReport, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    const RED: &str = "\x1b[31m";
-    const GREEN: &str = "\x1b[32m";
-    const YELLOW: &str = "\x1b[33m";
-    const BLUE: &str = "\x1b[34m";
-    const CYAN: &str = "\x1b[36m";
-    const BOLD: &str = "\x1b[1m";
-    const RESET: &str = "\x1b[0m";
-    const DIM: &str = "\x1b[2m";
 
     writeln!(f, "{BOLD}╔══════════════════════════════════════════════╗{RESET}")?;
     writeln!(f, "{BOLD}║      SPIRA - Audit configuration            ║{RESET}")?;

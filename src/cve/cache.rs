@@ -39,6 +39,7 @@ pub struct CpeRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct PackageRecord {
     pub name: String,
     pub version: String,
@@ -50,6 +51,7 @@ pub struct CveCache {
     conn: Connection,
 }
 
+#[allow(dead_code)]
 impl CveCache {
     pub fn new(db_path: PathBuf) -> Result<Self, CacheError> {
         let path = db_path.to_str().ok_or_else(|| {

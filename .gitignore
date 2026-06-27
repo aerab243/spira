@@ -23,3 +23,9 @@ Thumbs.db
 
 # Tests temp files
 *.tmp
+
+# Build artifacts (Debian packages, etc.)
+build-essential_*.deb
+gcc_*.deb
+libssl-dev_*.deb
+make_*.deb
