@@ -12,8 +12,6 @@ pub enum PackageError {
     CommandNotFound(String),
     #[error("Erreur d'exécution: {0}")]
     IoError(#[from] std::io::Error),
-    #[error("Erreur de parsing: {0}")]
-    ParseError(String),
 }
 
 pub trait PackageManagerTrait {

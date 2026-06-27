@@ -4,8 +4,6 @@ use crate::scanner::network::PortVulnerability;
 use crate::scanner::services::{PortInfo, ServiceInfo};
 use crate::utils::truncate;
 
-#[allow(dead_code)]
-const RED: &str = "\x1b[31m";
 const GREEN: &str = "\x1b[32m";
 const YELLOW: &str = "\x1b[33m";
 const BLUE: &str = "\x1b[34m";
@@ -20,6 +18,8 @@ pub struct CveSummary {
     pub score: Option<f64>,
     pub severity: Option<String>,
     pub description: String,
+    pub package_name: Option<String>,
+    pub installed_version: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -153,6 +153,9 @@ fn write_scan_report(r: &ScanReport, f: &mut std::fmt::Formatter<'_>) -> std::fm
         writeln!(f, "{YELLOW}═══ Vulnerabilites des paquets ═══{RESET}")?;
         for (i, v) in r.package_vulns.iter().enumerate() {
             writeln!(f, "  {}. {}", i + 1, colorize_cve(&v.id, v.severity.as_deref()))?;
+            if let (Some(pkg), Some(ver)) = (&v.package_name, &v.installed_version) {
+                writeln!(f, "     Paquet: {BOLD}{pkg}{RESET} (version installée: {ver})")?;
+            }
             writeln!(f, "     Score: {}", colorize_score(v.score))?;
             writeln!(f, "     Severite: {}", colorize_severity(v.severity.as_deref()))?;
             writeln!(f, "     {DIM}{}{RESET}", truncate(&v.description, 100))?;

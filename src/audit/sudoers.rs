@@ -11,8 +11,6 @@ pub enum SudoersError {
     ConfigNotFound(String),
     #[error("Erreur de lecture: {0}")]
     IoError(#[from] std::io::Error),
-    #[error("Erreur de parsing: {0}")]
-    ParseError(String),
 }
 
 const SUDOERS_PATHS: [&str; 3] = [
@@ -54,7 +52,7 @@ fn analyze_sudoers(content: &str) -> Vec<AuditFinding> {
                 check: "NOPASSWD",
                 status: "WARN",
                 severity: "HIGH",
-                recommendation: "Éviter NOPASSWD dans sudoers pour des commandes sensibles. Utiliser des règles restrictives.",
+                recommendation: "Éviter NOPASSWD dans sudoers pour des commandes sensibles. Utiliser des règles restrictives.".to_string(),
             });
         }
 
@@ -64,7 +62,7 @@ fn analyze_sudoers(content: &str) -> Vec<AuditFinding> {
                 check: "!authenticate",
                 status: "WARN",
                 severity: "HIGH",
-                recommendation: "Éviter !authenticate qui contourne l'authentification pour sudo",
+                recommendation: "Éviter !authenticate qui contourne l'authentification pour sudo".to_string(),
             });
         }
 
@@ -83,7 +81,7 @@ fn analyze_sudoers(content: &str) -> Vec<AuditFinding> {
                     check: "PATH",
                     status: "WARN",
                     severity: "MEDIUM",
-                    recommendation: "Utiliser secure_path pour définir un PATH sûr pour sudo",
+                    recommendation: "Utiliser secure_path pour définir un PATH sûr pour sudo".to_string(),
                 });
             }
         }
@@ -100,7 +98,7 @@ fn analyze_sudoers(content: &str) -> Vec<AuditFinding> {
             check: "sudoers policy",
             status: "OK",
             severity: "INFO",
-            recommendation: "Configuration sudoers standard (authentification requise). OK.",
+            recommendation: "Configuration sudoers standard (authentification requise). OK.".to_string(),
         });
     }
 
@@ -109,7 +107,7 @@ fn analyze_sudoers(content: &str) -> Vec<AuditFinding> {
             check: "dangerous_PATH",
             status: "FAIL",
             severity: "HIGH",
-            recommendation: "Chemin PATH dangereux dans sudoers. Utiliser secure_path pour éviter les binaires non fiables.",
+            recommendation: "Chemin PATH dangereux dans sudoers. Utiliser secure_path pour éviter les binaires non fiables.".to_string(),
         });
     }
 
@@ -118,7 +116,7 @@ fn analyze_sudoers(content: &str) -> Vec<AuditFinding> {
             check: "sudoers configuration",
             status: "INFO",
             severity: "INFO",
-            recommendation: "Aucune règle sudoers standard détectée. Vérifier les includes.",
+            recommendation: "Aucune règle sudoers standard détectée. Vérifier les includes.".to_string(),
         });
     }
 

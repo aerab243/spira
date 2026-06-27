@@ -74,7 +74,6 @@ pub fn detect() -> Result<DistroInfo, DistroError> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::collections::HashMap;
 
     fn parse_os_release(content: &str) -> HashMap<String, String> {

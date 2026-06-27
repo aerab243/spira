@@ -8,7 +8,7 @@ pub struct AuditFinding {
     pub check: &'static str,
     pub status: &'static str,
     pub severity: &'static str,
-    pub recommendation: &'static str,
+    pub recommendation: String,
 }
 
 #[derive(Debug, Error)]
@@ -17,8 +17,6 @@ pub enum AuditError {
     ConfigNotFound(String),
     #[error("Erreur de lecture: {0}")]
     IoError(#[from] std::io::Error),
-    #[error("Erreur de parsing: {0}")]
-    ParseError(String),
 }
 
 const SSH_CONFIG_PATHS: [&str; 4] = [
@@ -77,13 +75,13 @@ fn analyze_ssh_config(content: &str) -> Vec<AuditFinding> {
             check: "PermitRootLogin",
             status: "FAIL",
             severity: "HIGH",
-            recommendation: "Désactiver la connexion root directe: PermitRootLogin no",
+            recommendation: "Désactiver la connexion root directe: PermitRootLogin no".to_string(),
         }),
         _ => findings.push(AuditFinding {
             check: "PermitRootLogin",
             status: "WARN",
             severity: "MEDIUM",
-            recommendation: "Définir PermitRootLogin explicitement (no ou prohibit-password)",
+            recommendation: "Définir PermitRootLogin explicitement (no ou prohibit-password)".to_string(),
         }),
     }
 
@@ -93,13 +91,13 @@ fn analyze_ssh_config(content: &str) -> Vec<AuditFinding> {
             check: "PasswordAuthentication",
             status: "WARN",
             severity: "MEDIUM",
-            recommendation: "Préférer l'authentification par clé SSH: PasswordAuthentication no",
+            recommendation: "Préférer l'authentification par clé SSH: PasswordAuthentication no".to_string(),
         }),
         _ => findings.push(AuditFinding {
             check: "PasswordAuthentication",
             status: "WARN",
             severity: "LOW",
-            recommendation: "Définir PasswordAuthentication explicitement (no recommandé)",
+            recommendation: "Définir PasswordAuthentication explicitement (no recommandé)".to_string(),
         }),
     }
 
@@ -109,13 +107,13 @@ fn analyze_ssh_config(content: &str) -> Vec<AuditFinding> {
             check: "PubkeyAuthentication",
             status: "FAIL",
             severity: "HIGH",
-            recommendation: "Activer l'authentification par clé: PubkeyAuthentication yes",
+            recommendation: "Activer l'authentification par clé: PubkeyAuthentication yes".to_string(),
         }),
         _ => findings.push(AuditFinding {
             check: "PubkeyAuthentication",
             status: "WARN",
             severity: "MEDIUM",
-            recommendation: "Définir PubkeyAuthentication explicitement (yes recommandé)",
+            recommendation: "Définir PubkeyAuthentication explicitement (yes recommandé)".to_string(),
         }),
     }
 
@@ -124,7 +122,7 @@ fn analyze_ssh_config(content: &str) -> Vec<AuditFinding> {
             check: "PermitEmptyPasswords",
             status: "FAIL",
             severity: "CRITICAL",
-            recommendation: "Interdire les mots de passe vides: PermitEmptyPasswords no",
+            recommendation: "Interdire les mots de passe vides: PermitEmptyPasswords no".to_string(),
         });
     }
 
@@ -133,7 +131,7 @@ fn analyze_ssh_config(content: &str) -> Vec<AuditFinding> {
             check: "ChallengeResponseAuthentication",
             status: "WARN",
             severity: "MEDIUM",
-            recommendation: "Désactiver ChallengeResponseAuthentication si non nécessaire",
+            recommendation: "Désactiver ChallengeResponseAuthentication si non nécessaire".to_string(),
         });
     }
 
@@ -142,7 +140,7 @@ fn analyze_ssh_config(content: &str) -> Vec<AuditFinding> {
             check: "UsePAM",
             status: "WARN",
             severity: "LOW",
-            recommendation: "UsePAM no peut limiter les fonctionnalités (MFA, limits). Vérifier la nécessité.",
+            recommendation: "UsePAM no peut limiter les fonctionnalités (MFA, limits). Vérifier la nécessité.".to_string(),
         });
     }
 
@@ -195,8 +193,8 @@ PermitEmptyPasswords yes
     #[test]
     fn test_score_calculation() {
         let findings = vec![
-            AuditFinding { check: "A", status: "FAIL", severity: "HIGH", recommendation: "Fix A" },
-            AuditFinding { check: "B", status: "FAIL", severity: "MEDIUM", recommendation: "Fix B" },
+            AuditFinding { check: "A", status: "FAIL", severity: "HIGH", recommendation: "Fix A".to_string() },
+            AuditFinding { check: "B", status: "FAIL", severity: "MEDIUM", recommendation: "Fix B".to_string() },
         ];
         assert_eq!(ssh_security_score(&findings), 65);
     }
@@ -204,8 +202,8 @@ PermitEmptyPasswords yes
     #[test]
     fn test_score_floor() {
         let findings = vec![
-            AuditFinding { check: "A", status: "FAIL", severity: "CRITICAL", recommendation: "Fix A" },
-            AuditFinding { check: "B", status: "FAIL", severity: "CRITICAL", recommendation: "Fix B" },
+            AuditFinding { check: "A", status: "FAIL", severity: "CRITICAL", recommendation: "Fix A".to_string() },
+            AuditFinding { check: "B", status: "FAIL", severity: "CRITICAL", recommendation: "Fix B".to_string() },
         ];
         assert!(ssh_security_score(&findings) <= 20);
     }

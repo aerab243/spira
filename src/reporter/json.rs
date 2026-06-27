@@ -21,6 +21,8 @@ pub fn render_scan(report: &ScanReport) -> Result<String, serde_json::Error> {
         },
         "package_vulnerabilities": report.package_vulns.iter().map(|v| serde_json::json!({
             "id": v.id,
+            "package": v.package_name,
+            "installed_version": v.installed_version,
             "score": v.score,
             "severity": v.severity,
             "description": v.description,

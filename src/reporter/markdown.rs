@@ -56,11 +56,15 @@ fn write_md_scan(report: &ScanReport, f: &mut String) -> std::fmt::Result {
 
     if !report.package_vulns.is_empty() {
         push(f, "## Vulnerabilites des paquets\n\n")?;
-        push(f, "| CVE | Score | Severite | Description |\n")?;
-        push(f, "|-----|-------|----------|-------------|\n")?;
+        push(f, "| CVE | Paquet | Version | Score | Severite | Description |\n")?;
+        push(f, "|-----|--------|---------|-------|----------|-------------|\n")?;
         for v in &report.package_vulns {
             push(f, "| ")?;
             push(f, &v.id)?;
+            push(f, " | ")?;
+            push(f, v.package_name.as_deref().unwrap_or("?"))?;
+            push(f, " | ")?;
+            push(f, v.installed_version.as_deref().unwrap_or("?"))?;
             push(f, " | ")?;
             push(f, &format!("{:.1}", v.score.unwrap_or(0.0)))?;
             push(f, " | ")?;
@@ -190,7 +194,7 @@ fn write_md_audit(report: &AuditReport, f: &mut String) -> std::fmt::Result {
             push(f, "** | ")?;
             push(f, finding.severity)?;
             push(f, " | ")?;
-            push(f, finding.recommendation)?;
+            push(f, &finding.recommendation)?;
             push(f, " |\n")?;
         }
     }
@@ -215,7 +219,7 @@ fn write_md_audit(report: &AuditReport, f: &mut String) -> std::fmt::Result {
                 push(f, "** | ")?;
                 push(f, finding.severity)?;
                 push(f, " | ")?;
-                push(f, finding.recommendation)?;
+                push(f, &finding.recommendation)?;
                 push(f, " |\n")?;
             }
         }
@@ -238,7 +242,7 @@ fn write_md_audit(report: &AuditReport, f: &mut String) -> std::fmt::Result {
             push(f, "** | ")?;
             push(f, finding.severity)?;
             push(f, " | ")?;
-            push(f, finding.recommendation)?;
+            push(f, &finding.recommendation)?;
             push(f, " |\n")?;
         }
     }

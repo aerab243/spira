@@ -85,13 +85,17 @@ impl NvdClient {
                 return Err(NvdError::RateLimited);
             }
 
-            let nvd_response: NvdResponse = response.json()?;
+            let body = response.text().map_err(NvdError::HttpError)?;
+            let nvd_response: NvdResponse = serde_json::from_str(&body).map_err(|e| {
+                eprintln!("DEBUG body (first 500 chars): {}", &body[..body.len().min(500)]);
+                NvdError::JsonError(e.into())
+            })?;
             self.request_count += 1;
 
             for vuln in nvd_response.vulnerabilities {
                 let cve_id = vuln.cve.as_ref().and_then(|c| c.id.clone()).unwrap_or_default();
                 let cve = Self::parse_cve(vuln.cve.clone());
-                let cpes = extract_cpe_matches(&vuln, &cve_id);
+                let cpes = extract_cpe_matches(vuln.cve.as_ref(), &cve_id);
                 if let Some(cve) = cve {
                     all_items.push((cve, cpes));
                 }
@@ -129,15 +133,12 @@ impl NvdClient {
             .map(|d| d.value.clone())
             .unwrap_or_default();
 
-        let Some((cvss_score, severity)) = cve
-            .metrics
-            .cvss_metric_v31
-            .or(cve.metrics.cvss_metric_v30)
-            .or(cve.metrics.cvss_metric_v2)
-            .and_then(|metrics| metrics.first().cloned())
-            .map(|m| (Some(m.cvss_data.base_score), Some(m.cvss_severity)))
-        else {
-            return None;
+        // Récupération du premier set de métriques CVSS disponible, par ordre
+        // de préférence : V4.0 > V3.1 > V3.0 > V2. V2 n'expose pas de
+        // `baseSeverity` ; on le dérive alors du score selon les seuils NVD.
+        let (cvss_score, severity) = match pick_cvss_metrics(&cve.metrics) {
+            Some(v) => v,
+            None => return None,
         };
 
         let published = cve.published.parse().ok()?;
@@ -154,7 +155,10 @@ impl NvdClient {
     }
 }
 
+// ── NVD 2.0 Response structs ──
+
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct NvdResponse {
     results_per_page: usize,
     #[allow(dead_code)]
@@ -164,22 +168,28 @@ struct NvdResponse {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct NvdVulnerability {
-    #[allow(dead_code)]
     cve: Option<NvdCve>,
-    configurations: Option<NvdConfigurations>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 struct NvdCve {
     id: Option<String>,
+    #[allow(dead_code)]
+    source_identifier: Option<String>,
+    #[allow(dead_code)]
+    vuln_status: Option<String>,
     descriptions: Vec<NvdDescription>,
     metrics: NvdMetrics,
     published: String,
     last_modified: String,
+    configurations: Option<Vec<NvdConfigurationNode>>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 struct NvdDescription {
     lang: String,
     value: String,
@@ -188,11 +198,17 @@ struct NvdDescription {
 #[derive(Debug, Deserialize, Clone)]
 struct NvdMetrics {
     #[serde(rename = "cvssMetricV31")]
+    #[allow(dead_code)]
     cvss_metric_v31: Option<Vec<NvdCvssMetric>>,
     #[serde(rename = "cvssMetricV30")]
+    #[allow(dead_code)]
     cvss_metric_v30: Option<Vec<NvdCvssMetric>>,
     #[serde(rename = "cvssMetricV2")]
+    #[allow(dead_code)]
     cvss_metric_v2: Option<Vec<NvdCvssMetric>>,
+    #[serde(rename = "cvssMetricV40")]
+    #[allow(dead_code)]
+    cvss_metric_v40: Option<Vec<NvdCvssMetric>>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -200,62 +216,119 @@ struct NvdCvssMetric {
     #[serde(rename = "cvssData")]
     cvss_data: NvdCvssData,
     #[serde(rename = "baseSeverity")]
-    cvss_severity: String,
+    #[allow(dead_code)]
+    cvss_severity: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 struct NvdCvssData {
     #[serde(rename = "baseScore")]
+    #[allow(dead_code)]
     base_score: f64,
+    #[serde(rename = "baseSeverity")]
+    #[allow(dead_code)]
+    base_severity: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-struct NvdConfigurations {
-    nodes: Vec<NvdNode>,
+// ── CPE match nodes inside configurations ──
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct NvdConfigurationNode {
+    #[allow(dead_code)]
+    nodes: Option<Vec<NvdCpeMatchNode>>,
+    #[allow(dead_code)]
+    cpe_match: Option<Vec<NvdCpeMatch>>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
-struct NvdNode {
+#[serde(rename_all = "camelCase")]
+struct NvdCpeMatchNode {
+    #[allow(dead_code)]
+    operator: Option<String>,
+    #[allow(dead_code)]
+    negate: Option<bool>,
+    #[serde(rename = "cpeMatch")]
     cpe_match: Vec<NvdCpeMatch>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct NvdCpeMatch {
     pub criteria: String,
     pub vulnerable: bool,
+    #[allow(dead_code)]
     #[serde(rename = "versionStartIncluding")]
     pub version_start_including: Option<String>,
+    #[allow(dead_code)]
     #[serde(rename = "versionEndExcluding")]
     pub version_end_excluding: Option<String>,
+    #[allow(dead_code)]
     #[serde(rename = "versionStartExcluding")]
     pub version_start_excluding: Option<String>,
+    #[allow(dead_code)]
     #[serde(rename = "versionEndIncluding")]
     pub version_end_including: Option<String>,
+    #[allow(dead_code)]
+    #[serde(rename = "matchCriteriaId")]
+    pub match_criteria_id: Option<String>,
 }
 
 fn extract_cpe_matches(
-    vuln: &NvdVulnerability,
+    cve: Option<&NvdCve>,
     cve_id: &str,
 ) -> Vec<CpeRecord> {
     let mut cpes = Vec::new();
-    if let Some(ref configs) = vuln.configurations {
-        for node in &configs.nodes {
-            for cpe_match in &node.cpe_match {
-                if !cpe_match.vulnerable {
-                    continue;
+    let cve = match cve {
+        Some(c) => c,
+        None => return cpes,
+    };
+
+    // Configurations are inside the cve object
+    if let Some(ref config_nodes) = cve.configurations {
+        for config_node in config_nodes {
+            // Each config has nodes or cpeMatch directly
+            if let Some(ref cpe_match_list) = config_node.cpe_match {
+                for cpe_match in cpe_match_list {
+                    if !cpe_match.vulnerable {
+                        continue;
+                    }
+                    if let Some((vendor, product, _)) = parse_cpe_uri(&cpe_match.criteria) {
+                        cpes.push(CpeRecord {
+                            id: None,
+                            cve_id: cve_id.to_string(),
+                            cpe_name: cpe_match.criteria.clone(),
+                            vendor,
+                            product,
+                            version_start_including: cpe_match.version_start_including.clone(),
+                            version_end_excluding: cpe_match.version_end_excluding.clone(),
+                            version_start_excluding: cpe_match.version_start_excluding.clone(),
+                            version_end_including: cpe_match.version_end_including.clone(),
+                        });
+                    }
                 }
-                if let Some((vendor, product, _)) = parse_cpe_uri(&cpe_match.criteria) {
-                    cpes.push(CpeRecord {
-                        id: None,
-                        cve_id: cve_id.to_string(),
-                        cpe_name: cpe_match.criteria.clone(),
-                        vendor,
-                        product,
-                        version_start_including: cpe_match.version_start_including.clone(),
-                        version_end_excluding: cpe_match.version_end_excluding.clone(),
-                        version_start_excluding: cpe_match.version_start_excluding.clone(),
-                        version_end_including: cpe_match.version_end_including.clone(),
-                    });
+            }
+            // Also try nodes (old format)
+            if let Some(ref nodes) = config_node.nodes {
+                for node in nodes {
+                    for cpe_match in &node.cpe_match {
+                        if !cpe_match.vulnerable {
+                            continue;
+                        }
+                        if let Some((vendor, product, _)) = parse_cpe_uri(&cpe_match.criteria) {
+                            cpes.push(CpeRecord {
+                                id: None,
+                                cve_id: cve_id.to_string(),
+                                cpe_name: cpe_match.criteria.clone(),
+                                vendor,
+                                product,
+                                version_start_including: cpe_match.version_start_including.clone(),
+                                version_end_excluding: cpe_match.version_end_excluding.clone(),
+                                version_start_excluding: cpe_match.version_start_excluding.clone(),
+                                version_end_including: cpe_match.version_end_including.clone(),
+                            });
+                        }
+                    }
                 }
             }
         }
@@ -271,4 +344,65 @@ fn parse_cpe_uri(uri: &str) -> Option<(String, String, String)> {
         return Some((vendor, product, String::new()));
     }
     None
+}
+
+/// Sélectionne le premier set de métriques CVSS disponible selon l'ordre de
+/// préférence NVD : V4.0 > V3.1 > V3.0 > V2. Retourne `(score, severity)` où
+/// `severity` est toujours dérivée si elle manque (cas de V2).
+fn pick_cvss_metrics(metrics: &NvdMetrics) -> Option<(Option<f64>, Option<String>)> {
+    // V3 : `baseSeverity` est exposé par NVD ; fallback sur dérivation si absent.
+    for slot in [
+        metrics.cvss_metric_v40.as_ref(),
+        metrics.cvss_metric_v31.as_ref(),
+        metrics.cvss_metric_v30.as_ref(),
+    ] {
+        if let Some(m) = slot.and_then(|m| m.first()) {
+            let score = m.cvss_data.base_score;
+            let sev = m
+                .cvss_data
+                .base_severity
+                .clone()
+                .unwrap_or_else(|| severity_from_score(score));
+            return Some((Some(score), Some(sev)));
+        }
+    }
+
+    // V2 : pas de `baseSeverity` dans la réponse NVD → dérivation systématique.
+    if let Some(m) = metrics.cvss_metric_v2.as_ref().and_then(|m| m.first()) {
+        let score = m.cvss_data.base_score;
+        return Some((Some(score), Some(severity_from_score(score))));
+    }
+
+    None
+}
+
+/// Dérive la sévérité CVSS à partir du score, selon les seuils officiels.
+/// Applicable aux métriques V2 et V3.
+fn severity_from_score(score: f64) -> String {
+    if score >= 9.0 {
+        "CRITICAL".to_string()
+    } else if score >= 7.0 {
+        "HIGH".to_string()
+    } else if score >= 4.0 {
+        "MEDIUM".to_string()
+    } else {
+        "LOW".to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_severity_from_score_thresholds() {
+        assert_eq!(severity_from_score(10.0), "CRITICAL");
+        assert_eq!(severity_from_score(9.0), "CRITICAL");
+        assert_eq!(severity_from_score(8.9), "HIGH");
+        assert_eq!(severity_from_score(7.0), "HIGH");
+        assert_eq!(severity_from_score(6.9), "MEDIUM");
+        assert_eq!(severity_from_score(4.0), "MEDIUM");
+        assert_eq!(severity_from_score(3.9), "LOW");
+        assert_eq!(severity_from_score(0.0), "LOW");
+    }
 }

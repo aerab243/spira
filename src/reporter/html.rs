@@ -78,13 +78,19 @@ fn write_html_scan(report: &ScanReport, f: &mut String) -> std::fmt::Result {
     if !report.package_vulns.is_empty() {
         push(f, "  <h2>Vulnérabilités des paquets</h2>")?;
         push(f, "  <table>")?;
-        push(f, "    <tr><th>CVE</th><th>Score</th><th>Sévérité</th><th>Description</th></tr>")?;
+        push(f, "    <tr><th>CVE</th><th>Paquet</th><th>Version</th><th>Score</th><th>Sévérité</th><th>Description</th></tr>")?;
         for v in &report.package_vulns {
             let sev_class = severity_class(v.severity.as_deref());
             push(f, "    <tr>")?;
             push(f, "      <td><strong>")?;
             push(f, &html_escape(&v.id))?;
             push(f, "</strong></td>")?;
+            push(f, "      <td>")?;
+            push(f, &html_escape(v.package_name.as_deref().unwrap_or("?")))?;
+            push(f, "</td>")?;
+            push(f, "      <td>")?;
+            push(f, &html_escape(v.installed_version.as_deref().unwrap_or("?")))?;
+            push(f, "</td>")?;
             push(f, "      <td>")?;
             push(f, &format!("{:.1}", v.score.unwrap_or(0.0)))?;
             push(f, "</td>")?;
@@ -237,7 +243,7 @@ fn write_html_audit(report: &AuditReport, f: &mut String) -> std::fmt::Result {
             push(f, &html_escape(finding.severity))?;
             push(f, "</td>")?;
             push(f, "      <td class=\"recommendation\">")?;
-            push(f, &html_escape(finding.recommendation))?;
+            push(f, &html_escape(&finding.recommendation))?;
             push(f, "</td>")?;
             push(f, "    </tr>")?;
         }
@@ -270,7 +276,7 @@ fn write_html_audit(report: &AuditReport, f: &mut String) -> std::fmt::Result {
                 push(f, &html_escape(finding.severity))?;
                 push(f, "</td>")?;
                 push(f, "      <td class=\"recommendation\">")?;
-                push(f, &html_escape(finding.recommendation))?;
+                push(f, &html_escape(&finding.recommendation))?;
                 push(f, "</td>")?;
                 push(f, "    </tr>")?;
             }
@@ -301,7 +307,7 @@ fn write_html_audit(report: &AuditReport, f: &mut String) -> std::fmt::Result {
             push(f, &html_escape(finding.severity))?;
             push(f, "</td>")?;
             push(f, "      <td class=\"recommendation\">")?;
-            push(f, &html_escape(finding.recommendation))?;
+            push(f, &html_escape(&finding.recommendation))?;
             push(f, "</td>")?;
             push(f, "    </tr>")?;
         }
