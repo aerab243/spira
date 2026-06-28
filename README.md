@@ -65,7 +65,7 @@ Spira est un outil en ligne de commande qui détecte la distribution Linux sur l
 ### Depuis les sources
 
 ```bash
-git clone https://github.com/aerab/spira.git
+git clone https://github.com/aerab243/spira.git
 cd spira
 cargo build --release
 sudo cp target/release/spira /usr/local/bin/
