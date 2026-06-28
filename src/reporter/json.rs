@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::reporter::terminal::{AuditReport, ScanReport};
 
 pub fn render_scan(report: &ScanReport) -> Result<String, serde_json::Error> {

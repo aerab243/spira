@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 use clap::Parser;
 use std::str::FromStr;
 
@@ -78,12 +80,12 @@ fn main() {
 
     // Pré-extraction des champs qui seront consommés dans les bras du match,
     // afin d'éviter les conflits de move sur `cli.command`.
-    let (kernel_flag, services_flag, format_str, audit_format_str) = match &cli.command {
-        Commands::Scan { kernel, services, format, .. } => {
-            (*kernel, *services, Some(format.clone()), None)
+    let (kernel_flag, services_flag, format_str, audit_format_str, max_cve_flag) = match &cli.command {
+        Commands::Scan { kernel, services, format, max_cve, .. } => {
+            (*kernel, *services, Some(format.clone()), None, *max_cve)
         }
-        Commands::Audit { format } => (false, false, None, Some(format.clone())),
-        _ => (false, false, None, None),
+        Commands::Audit { format } => (false, false, None, Some(format.clone()), 0),
+        _ => (false, false, None, None, 0),
     };
 
     // Validation des formats avant le dispatch.
@@ -104,7 +106,7 @@ fn main() {
         Commands::Detect { kernel, packages } => cmd_detect(cli, kernel, packages),
         Commands::Packages => cmd_packages(cli),
         Commands::Scan { .. } => match parse_format(format_str.as_deref().unwrap_or("terminal")) {
-            Ok(fmt) => cmd_scan(cli, kernel_flag, services_flag, fmt),
+            Ok(fmt) => cmd_scan(cli, kernel_flag, services_flag, max_cve_flag, fmt),
             Err(e) => Err(e.into()),
         },
         Commands::Audit { .. } => match parse_format(audit_format_str.as_deref().unwrap_or("terminal")) {
@@ -191,6 +193,7 @@ fn cmd_scan(
     _cli: Cli,
     kernel: bool,
     services: bool,
+    max_cve: usize,
     fmt: ReportFormat,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let distro = scanner::distro::detect()?;
@@ -250,6 +253,8 @@ fn cmd_scan(
     package_vulns.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
     kernel_vulns.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
 
+    let max_cve_opt = if max_cve > 0 { Some(max_cve) } else { None };
+
     let report = ScanReport {
         distro_id: distro.id,
         distro_name: distro.pretty_name,
@@ -257,6 +262,7 @@ fn cmd_scan(
         kernel: kernel_info,
         package_manager: format!("{:?}", manager),
         total_packages: packages.len(),
+        max_cve: max_cve_opt,
         package_vulns,
         kernel_vulns,
         services: svcs,
@@ -346,15 +352,14 @@ fn cmd_vulns(name: String) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn cmd_update(_cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Mise à jour du cache CVE depuis NVD...");
+    println!("Mise à jour du cache CVE depuis les data feeds NVD...");
 
     let cache = open_cache()?;
-    let mut client = NvdClient::new();
+    let client = NvdClient::new();
 
-    let days = 30;
-    println!("Récupération des CVEs des {days} derniers jours...");
-
-    let items = client.fetch_recent(days)?;
+    // Télécharge `recent_cves.json.gz` (8 derniers jours) +
+    // `modified_cves.json.gz` (CVEs modifiés récemment, sans limite d'âge).
+    let items = client.fetch_feed()?;
     println!("{} entrées récupérées, insertion dans le cache...", items.len());
 
     let mut cve_count = 0;

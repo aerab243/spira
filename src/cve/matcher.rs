@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 use semver::Version;
 
 use crate::cve::cache::CpeRecord;

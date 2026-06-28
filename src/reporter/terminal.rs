@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::audit::ssh::AuditFinding;
 use crate::scanner::kernel::KernelInfo;
 use crate::scanner::network::PortVulnerability;
@@ -30,6 +32,7 @@ pub struct ScanReport {
     pub kernel: Option<KernelInfo>,
     pub package_manager: String,
     pub total_packages: usize,
+    pub max_cve: Option<usize>, // 0 = tout, Some(N) = top N
     pub package_vulns: Vec<CveSummary>,
     pub kernel_vulns: Vec<CveSummary>,
     pub services: Vec<ServiceInfo>,
@@ -123,6 +126,40 @@ impl std::fmt::Display for AuditReport {
     }
 }
 
+/// Grouper les CVE par sévérité dans l'ordre : CRITICAL, HIGH, MEDIUM, LOW, autres.
+fn group_by_severity<'a>(
+    vulns: &'a [CveSummary],
+) -> Vec<(&'static str, Vec<&'a CveSummary>)> {
+    use std::collections::HashMap;
+    let mut by_sev: HashMap<&str, Vec<&CveSummary>> = HashMap::new();
+    let order: [&str; 5] = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "OTHER"];
+
+    for v in vulns {
+        let key = v.severity.as_deref().unwrap_or("OTHER");
+        // On normalise "CRITICAL"/"HIGH"/etc — les autres vont dans "OTHER"
+        if !order[..4].contains(&key) {
+            by_sev.entry("OTHER").or_default().push(v);
+        } else {
+            by_sev.entry(key).or_default().push(v);
+        }
+    }
+
+    let mut grouped: Vec<_> = order
+        .iter()
+        .filter_map(|sev| {
+            let items = by_sev.remove(*sev)?;
+            Some((*sev, items))
+        })
+        .collect();
+
+    // "OTHER" dans le groupe "OTHER" (non-classifié)
+    if let Some(rest) = by_sev.remove("OTHER") {
+        grouped.push(("OTHER", rest));
+    }
+
+    grouped
+}
+
 fn write_scan_report(r: &ScanReport, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 
     writeln!(f, "{BOLD}╔══════════════════════════════════════════════╗{RESET}")?;
@@ -149,30 +186,77 @@ fn write_scan_report(r: &ScanReport, f: &mut std::fmt::Formatter<'_>) -> std::fm
     writeln!(f, "{CYAN}└─────────────────────────────────────────────┘{RESET}")?;
     writeln!(f)?;
 
-    if !r.package_vulns.is_empty() {
-        writeln!(f, "{YELLOW}═══ Vulnerabilites des paquets ═══{RESET}")?;
-        for (i, v) in r.package_vulns.iter().enumerate() {
-            writeln!(f, "  {}. {}", i + 1, colorize_cve(&v.id, v.severity.as_deref()))?;
-            if let (Some(pkg), Some(ver)) = (&v.package_name, &v.installed_version) {
-                writeln!(f, "     Paquet: {BOLD}{pkg}{RESET} (version installée: {ver})")?;
+    /// Affiche les CVE groupés par sévérité avec option de troncature
+fn write_vulns_section(
+    title: &str,
+    vulns: &[CveSummary],
+    max_cve: Option<usize>,
+    f: &mut std::fmt::Formatter<'_>,
+) -> std::fmt::Result {
+    if vulns.is_empty() {
+        return Ok(());
+    }
+
+    let max = max_cve.unwrap_or(0);
+    let grouped = group_by_severity(vulns);
+    let mut total_written = 0usize;
+
+    writeln!(f, "  {YELLOW}═══ {title} ═══{RESET}")?;
+
+    for (sev, items) in &grouped {
+        let limit = if max > 0 {
+            let remaining = max.saturating_sub(total_written);
+            if remaining == 0 {
+                break;
             }
-            writeln!(f, "     Score: {}", colorize_score(v.score))?;
-            writeln!(f, "     Severite: {}", colorize_severity(v.severity.as_deref()))?;
-            writeln!(f, "     {DIM}{}{RESET}", truncate(&v.description, 100))?;
+            items.len().min(remaining)
+        } else {
+            items.len()
+        };
+
+        let shown = &items[..limit];
+        total_written += shown.len();
+
+        if shown.is_empty() {
+            continue;
+        }
+
+        let sev_label = match *sev {
+            "CRITICAL" => "\x1b[31m\x1b[1mCRITIQUE\x1b[0m",
+            "HIGH" => "\x1b[31m\x1b[1mELEVEE\x1b[0m",
+            "MEDIUM" => "\x1b[33m\x1b[1mMOYENNE\x1b[0m",
+            "LOW" => "\x1b[32m\x1b[1mFAIBLE\x1b[0m",
+            _ => "NON CLASSIFIE",
+        };
+
+        writeln!(f, "    {BOLD}─── {sev_label} ({}) ───{RESET}", shown.len())?;
+        for v in shown {
+            writeln!(f, "      {}", colorize_cve(&v.id, v.severity.as_deref()))?;
+            if let (Some(pkg), Some(ver)) = (&v.package_name, &v.installed_version) {
+                writeln!(f, "        Paquet: {BOLD}{pkg}{RESET} (installée: {ver})")?;
+            }
+            writeln!(f, "        Score: {}", colorize_score(v.score))?;
+            writeln!(f, "        Severite: {}", colorize_severity(v.severity.as_deref()))?;
+            writeln!(f, "        {DIM}{}{RESET}", truncate(&v.description, 100))?;
             writeln!(f)?;
         }
     }
 
-    if !r.kernel_vulns.is_empty() {
-        writeln!(f, "{YELLOW}═══ Vulnerabilites du noyau ═══{RESET}")?;
-        for (i, v) in r.kernel_vulns.iter().enumerate() {
-            writeln!(f, "  {}. {}", i + 1, colorize_cve(&v.id, v.severity.as_deref()))?;
-            writeln!(f, "     Score: {}", colorize_score(v.score))?;
-            writeln!(f, "     Severite: {}", colorize_severity(v.severity.as_deref()))?;
-            writeln!(f, "     {DIM}{}{RESET}", truncate(&v.description, 100))?;
-            writeln!(f)?;
-        }
+    if max > 0 && vulns.len() > total_written {
+        writeln!(
+            f,
+            "    {DIM}({}/{}) CVE restants masqués — utilisez --max-cve 0 pour tout voir.{RESET}",
+            vulns.len() - total_written,
+            vulns.len()
+        )?;
     }
+
+    Ok(())
+}
+
+    // ── Sections des vulnérabilités ──
+    write_vulns_section("Vulnerabilites des paquets", &r.package_vulns, r.max_cve, f)?;
+    write_vulns_section("Vulnerabilites du noyau", &r.kernel_vulns, r.max_cve, f)?;
 
     if !r.services.is_empty() {
         writeln!(f, "{BLUE}═══ Services systemd actifs ═══{RESET}")?;

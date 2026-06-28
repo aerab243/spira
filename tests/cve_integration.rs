@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 //! Tests d'intégration du cache CVE (SQLite en mémoire) et du matcher de versions.
 
 use chrono::Utc;

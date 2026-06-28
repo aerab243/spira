@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::cve::cache::CveCache;
 use crate::scanner::services::{detect_open_ports, PortInfo, ServiceError};
 
