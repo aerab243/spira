@@ -29,3 +29,5 @@ build-essential_*.deb
 gcc_*.deb
 libssl-dev_*.deb
 make_*.deb
+
+spec/
