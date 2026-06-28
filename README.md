@@ -74,7 +74,7 @@ sudo cp target/release/spira /usr/local/bin/
 ### Via `cargo install`
 
 ```bash
-cargo install --git https://github.com/aerab/spira
+cargo install --git https://github.com/aerab243/spira
 ```
 
 ### Vérification
@@ -547,8 +547,8 @@ Ce projet est distribué sous licence **Apache-2.0**. Voir [`LICENSE`](LICENSE) 
 
 ## 📬 Contact & support
 
-- 🐛 **Bugs / demandes** : [GitHub Issues](https://github.com/aerab/spira/issues)
-- 💬 **Discussions** : [GitHub Discussions](https://github.com/aerab/spira/discussions)
+- 🐛 **Bugs / demandes** : [GitHub Issues](https://github.com/aerab243/spira/issues)
+- 💬 **Discussions** : [GitHub Discussions](https://github.com/aerab243/spira/discussions)
 - 📖 **Documentation complète** : [`PLAN.md`](PLAN.md) (roadmap détaillée)
 
 ---
