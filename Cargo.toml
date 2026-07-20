@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+members = [
+    "spira-core",
+    "spira-gui",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Spira - Security Vulnerability Scanner for Linux"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+chrono = "0.4"
+log = "0.4"
+thiserror = "2"
